@@ -16,7 +16,7 @@
    Contributing author: Christian Negre (LANL)
 ------------------------------------------------------------------------- */
 
-#include "fix_latte.h"
+#include "fix_profess.h"
 
 #include "atom.h"
 #include "comm.h"
@@ -34,36 +34,36 @@ using namespace LAMMPS_NS;
 using namespace FixConst;
 
 extern "C" {
-  void latte(int *, int *, double *, int *, int *,
+  void profess(int *, int *, double *, int *, int *,
              double *, double *, double *, double *,
              double *, double *, double *, int *,
              double *, double *, double *, double *, int * , bool *);
-  int latte_abiversion();
+  int profess_abiversion();
 }
 
 // the ABIVERSION number here must be kept consistent
-// with its counterpart in the LATTE library and the
+// with its counterpart in the PROFESS library and the
 // prototype above. We want to catch mismatches with
 // a meaningful error messages, as they can cause
 // difficult to debug crashes or memory corruption.
 
-#define LATTE_ABIVERSION 20180622
+#define PROFESS_ABIVERSION 20180622
 
 /* ---------------------------------------------------------------------- */
 
-FixLatte::FixLatte(LAMMPS *lmp, int narg, char **arg) :
+FixProfess::FixProfess(LAMMPS *lmp, int narg, char **arg) :
   Fix(lmp, narg, arg)
 {
   if (strcmp(update->unit_style,"metal") != 0)
-    error->all(FLERR,"Must use units metal with fix latte command");
+    error->all(FLERR,"Must use units metal with fix profess command");
 
   if (comm->nprocs != 1)
-    error->all(FLERR,"Fix latte currently runs only in serial");
+    error->all(FLERR,"Fix profess currently runs only in serial");
 
-  if (LATTE_ABIVERSION != latte_abiversion())
-    error->all(FLERR,"LAMMPS is linked against incompatible LATTE library");
+  if (PROFESS_ABIVERSION != profess_abiversion())
+    error->all(FLERR,"LAMMPS is linked against incompatible PROFESS library");
 
-  if (narg != 4) error->all(FLERR,"Illegal fix latte command");
+  if (narg != 4) error->all(FLERR,"Illegal fix profess command");
 
   scalar_flag = 1;
   global_freq = 1;
@@ -72,44 +72,44 @@ FixLatte::FixLatte(LAMMPS *lmp, int narg, char **arg) :
   virial_global_flag = 1;
   thermo_energy = thermo_virial = 1;
 
-  // store ID of compute pe/atom used to generate Coulomb potential for LATTE
-  // null pointer means LATTE will compute Coulombic potential
+  // store ID of compute pe/atom used to generate Coulomb potential for PROFESS
+  // null pointer means PROFESS will compute Coulombic potential
 
   coulomb = 0;
   id_pe = nullptr;
 
   if (strcmp(arg[3],"NULL") != 0) {
     coulomb = 1;
-    error->all(FLERR,"Fix latte does not yet support a LAMMPS calculation of a Coulomb potential");
+    error->all(FLERR,"Fix profess does not yet support a LAMMPS calculation of a Coulomb potential");
 
     id_pe = utils::strdup(arg[3]);
     c_pe = modify->get_compute_by_id(id_pe);
-    if (!c_pe) error->all(FLERR,"Could not find fix latte compute ID {}", id_pe);
+    if (!c_pe) error->all(FLERR,"Could not find fix profess compute ID {}", id_pe);
     if (c_pe->peatomflag == 0)
-      error->all(FLERR,"Fix latte compute ID does not compute pe/atom");
+      error->all(FLERR,"Fix profess compute ID does not compute pe/atom");
   }
 
   // initializations
 
   nmax = 0;
   qpotential = nullptr;
-  flatte = nullptr;
+  fprofess = nullptr;
 
-  latte_energy = 0.0;
+  profess_energy = 0.0;
 }
 
 /* ---------------------------------------------------------------------- */
 
-FixLatte::~FixLatte()
+FixProfess::~FixProfess()
 {
   delete[] id_pe;
   memory->destroy(qpotential);
-  memory->destroy(flatte);
+  memory->destroy(fprofess);
 }
 
 /* ---------------------------------------------------------------------- */
 
-int FixLatte::setmask()
+int FixProfess::setmask()
 {
   int mask = 0;
   mask |= PRE_REVERSE;
@@ -120,19 +120,19 @@ int FixLatte::setmask()
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::init()
+void FixProfess::init()
 {
   // error checks
 
   if (domain->dimension == 2)
-    error->all(FLERR,"Fix latte requires 3d problem");
+    error->all(FLERR,"Fix profess requires 3d problem");
 
   if (coulomb) {
     if (atom->q_flag == 0 || force->pair == nullptr || force->kspace == nullptr)
-      error->all(FLERR,"Fix latte cannot compute Coulomb potential");
+      error->all(FLERR,"Fix profess cannot compute Coulomb potential");
 
     c_pe = modify->get_compute_by_id(id_pe);
-    if (!c_pe) error->all(FLERR,"Could not find fix latte compute ID {}", id_pe);
+    if (!c_pe) error->all(FLERR,"Could not find fix profess compute ID {}", id_pe);
   }
 
   // must be fully periodic or fully non-periodic
@@ -140,27 +140,27 @@ void FixLatte::init()
   if (domain->nonperiodic == 0) pbcflag = 1;
   else if (!domain->xperiodic && !domain->yperiodic && !domain->zperiodic)
     pbcflag = 0;
-  else error->all(FLERR,"Fix latte requires 3d simulation");
+  else error->all(FLERR,"Fix profess requires 3d simulation");
 
-  // create qpotential & flatte if needed
+  // create qpotential & fprofess if needed
   // for now, assume nlocal will never change
 
   if (coulomb && qpotential == nullptr) {
-    memory->create(qpotential,atom->nlocal,"latte:qpotential");
-    memory->create(flatte,atom->nlocal,3,"latte:flatte");
+    memory->create(qpotential,atom->nlocal,"profess:qpotential");
+    memory->create(fprofess,atom->nlocal,3,"profess:fprofess");
   }
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::init_list(int /*id*/, NeighList * /*ptr*/)
+void FixProfess::init_list(int /*id*/, NeighList * /*ptr*/)
 {
   // list = ptr;
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::setup(int vflag)
+void FixProfess::setup(int vflag)
 {
   newsystem = 1;
   post_force(vflag);
@@ -169,7 +169,7 @@ void FixLatte::setup(int vflag)
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::min_setup(int vflag)
+void FixProfess::min_setup(int vflag)
 {
   newsystem = 1;
   post_force(vflag);
@@ -178,7 +178,7 @@ void FixLatte::min_setup(int vflag)
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::setup_pre_reverse(int eflag, int vflag)
+void FixProfess::setup_pre_reverse(int eflag, int vflag)
 {
   pre_reverse(eflag,vflag);
 }
@@ -187,20 +187,20 @@ void FixLatte::setup_pre_reverse(int eflag, int vflag)
    integrate electronic degrees of freedom
 ------------------------------------------------------------------------- */
 
-void FixLatte::initial_integrate(int /*vflag*/) {}
+void FixProfess::initial_integrate(int /*vflag*/) {}
 
 /* ----------------------------------------------------------------------
    store eflag, so can use it in post_force to tally per-atom energies
 ------------------------------------------------------------------------- */
 
-void FixLatte::pre_reverse(int eflag, int /*vflag*/)
+void FixProfess::pre_reverse(int eflag, int /*vflag*/)
 {
   eflag_caller = eflag;
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::post_force(int vflag)
+void FixProfess::post_force(int vflag)
 {
   int eflag = eflag_caller;
   ev_init(eflag,vflag);
@@ -233,19 +233,19 @@ void FixLatte::post_force(int vflag)
   int coulombflag = 0;
   neighflag = 0;
 
-  // set flags used by LATTE
-  // NOTE: LATTE does not compute per-atom energies or virials
+  // set flags used by PROFESS
+  // NOTE: PROFESS does not compute per-atom energies or virials
 
   int flags[6];
 
   flags[0] = pbcflag;         // 1 for fully periodic, 0 for fully non-periodic
-  flags[1] = coulombflag;     // 1 for LAMMPS computes Coulombics, 0 for LATTE
+  flags[1] = coulombflag;     // 1 for LAMMPS computes Coulombics, 0 for PROFESS
   flags[2] = eflag_atom;      // 1 to return per-atom energies, 0 for no
   flags[3] = vflag_global && thermo_virial;    // 1 to return global/per-atom
   flags[4] = vflag_atom && thermo_virial;      //   virial, 0 for no
-  flags[5] = neighflag;       // 1 to pass neighbor list to LATTE, 0 for no
+  flags[5] = neighflag;       // 1 to pass neighbor list to PROFESS, 0 for no
 
-  // setup LATTE arguments
+  // setup PROFESS arguments
 
   int natoms = atom->nlocal;
   double *coords = &atom->x[0][0];
@@ -255,34 +255,34 @@ void FixLatte::post_force(int vflag)
   double *boxlo = domain->boxlo;
   double *boxhi = domain->boxhi;
   double *forces;
-  bool latteerror = false;
-  if (coulomb) forces = &flatte[0][0];
+  bool professerror = false;
+  if (coulomb) forces = &fprofess[0][0];
   else forces = &atom->f[0][0];
   int maxiter = -1;
 
-  latte(flags,&natoms,coords,type,&ntypes,mass,boxlo,boxhi,&domain->xy,
-        &domain->xz,&domain->yz,forces,&maxiter,&latte_energy,
-        &atom->v[0][0],&update->dt,virial,&newsystem,&latteerror);
+  profess(flags,&natoms,coords,type,&ntypes,mass,boxlo,boxhi,&domain->xy,
+        &domain->xz,&domain->yz,forces,&maxiter,&profess_energy,
+        &atom->v[0][0],&update->dt,virial,&newsystem,&professerror);
 
-  if (latteerror) error->all(FLERR,"Internal LATTE problem");
+  if (professerror) error->all(FLERR,"Internal PROFESS problem");
 
-  // sum LATTE forces to LAMMPS forces
+  // sum PROFESS forces to LAMMPS forces
   // e.g. LAMMPS may compute Coulombics at some point
 
   if (coulomb) {
     double **f = atom->f;
     int nlocal = atom->nlocal;
     for (int i = 0; i < nlocal; i++) {
-      f[i][0] += flatte[i][0];
-      f[i][1] += flatte[i][1];
-      f[i][2] += flatte[i][2];
+      f[i][0] += fprofess[i][0];
+      f[i][1] += fprofess[i][1];
+      f[i][2] += fprofess[i][2];
     }
   }
 }
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::min_post_force(int vflag)
+void FixProfess::min_post_force(int vflag)
 {
   post_force(vflag);
 }
@@ -291,30 +291,30 @@ void FixLatte::min_post_force(int vflag)
    integrate electronic degrees of freedom
 ------------------------------------------------------------------------- */
 
-void FixLatte::final_integrate() {}
+void FixProfess::final_integrate() {}
 
 /* ---------------------------------------------------------------------- */
 
-void FixLatte::reset_dt()
+void FixProfess::reset_dt()
 {
   //dtv = update->dt;
   //dtf = 0.5 * update->dt * force->ftm2v;
 }
 
 /* ----------------------------------------------------------------------
-   DFTB energy from LATTE
+   DFTB energy from PROFESS
 ------------------------------------------------------------------------- */
 
-double FixLatte::compute_scalar()
+double FixProfess::compute_scalar()
 {
-  return latte_energy;
+  return profess_energy;
 }
 
 /* ----------------------------------------------------------------------
    memory usage of local arrays
 ------------------------------------------------------------------------- */
 
-double FixLatte::memory_usage()
+double FixProfess::memory_usage()
 {
   double bytes = 0.0;
   if (coulomb) bytes += (double)nmax * sizeof(double);

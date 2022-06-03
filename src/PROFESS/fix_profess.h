@@ -13,21 +13,21 @@
 
 #ifdef FIX_CLASS
 // clang-format off
-FixStyle(latte,FixLatte);
+FixStyle(profess,FixProfess);
 // clang-format on
 #else
 
-#ifndef LMP_FIX_LATTE_H
-#define LMP_FIX_LATTE_H
+#ifndef LMP_FIX_PROFESS_H
+#define LMP_FIX_PROFESS_H
 
 #include "fix.h"
 
 namespace LAMMPS_NS {
 
-class FixLatte : public Fix {
+class FixProfess : public Fix {
  public:
-  FixLatte(class LAMMPS *, int, char **);
-  ~FixLatte() override;
+  FixProfess(class LAMMPS *, int, char **);
+  ~FixProfess() override;
   int setmask() override;
   void init() override;
   void init_list(int, class NeighList *) override;
@@ -50,8 +50,8 @@ class FixLatte : public Fix {
 
   int nmax, newsystem;
   double *qpotential;
-  double **flatte;
-  double latte_energy;
+  double **fprofess;
+  double profess_energy;
 
   class NeighList *list;
   class Compute *c_pe;
