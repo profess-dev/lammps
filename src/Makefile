@@ -114,6 +114,7 @@ PACKAGE = \
 	plugin \
 	plumed \
 	poems \
+	profess \
 	ptm \
 	python \
 	qeq \
@@ -227,6 +228,7 @@ PACKLIB = \
 	netcdf \
 	ml-pace \
 	plumed \
+	profess \
 	qmmm \
 	ml-quip \
 	scafacos \
@@ -251,6 +253,7 @@ PACKEXT = \
 	mscg \
 	netcdf \
 	plumed \
+	profess \
 	qmmm \
 	scafacos \
 	voronoi \
