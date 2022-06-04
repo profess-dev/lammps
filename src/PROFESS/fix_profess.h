@@ -33,6 +33,7 @@ class FixProfess : public Fix {
   double compute_scalar() override;
 
  protected:
+  double profess_energy;
 
 };
 
