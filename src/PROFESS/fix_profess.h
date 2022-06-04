@@ -29,32 +29,11 @@ class FixProfess : public Fix {
   FixProfess(class LAMMPS *, int, char **);
   ~FixProfess() override;
   int setmask() override;
-  void init() override;
-  void init_list(int, class NeighList *) override;
-  void setup(int) override;
-  void min_setup(int) override;
-  void setup_pre_reverse(int, int) override;
-  void initial_integrate(int) override;
-  void pre_reverse(int, int) override;
   void post_force(int) override;
-  void min_post_force(int) override;
-  void final_integrate() override;
-  void reset_dt() override;
   double compute_scalar() override;
-  double memory_usage() override;
 
  protected:
-  char *id_pe;
-  int coulomb, pbcflag, pe_peratom, virial_global, virial_peratom, neighflag;
-  int eflag_caller;
 
-  int nmax, newsystem;
-  double *qpotential;
-  double **fprofess;
-  double profess_energy;
-
-  class NeighList *list;
-  class Compute *c_pe;
 };
 
 }    // namespace LAMMPS_NS
